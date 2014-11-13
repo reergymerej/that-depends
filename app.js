@@ -1,67 +1,53 @@
 'use strict';
 
-function Foo(name) {
-  this.name = name;
-}
 
-Foo.prototype.deps = function (blockers) {
-  this.blockers = blockers;
-};
 
-Foo.prototype.getBlockers = function () {
-  return this.blockers;
-};
+var itemsRef = [];
+var itemsBlockers = {};
 
-Foo.prototype.getAllBlockers = function () {
-  var blockers = this.allBlockers;
+var getAllBlockers = function (item, getItemBlockerFn) {
+  var blockers;
+  var subBlockers = [];
   var i = 0;
   var length;
-  var subBlockers = [];
 
-  if (!blockers) {
+  blockers = getFromCache(item);
+
+  // no cached value
+  if (blockers === undefined) {
     blockers = [];
-    blockers = copyArray(this.getBlockers());
+    blockers = copyArray(getItemBlockerFn(item));
     length = blockers.length;
 
+    // recurse
     while (i < length) {
-      subBlockers = subBlockers.concat(blockers[i].getAllBlockers());
+      subBlockers = subBlockers.concat(getItemBlockerFn(blockers[i]));
       i++;
     }
 
+    // combine with recursive blockers
     blockers = blockers.concat(subBlockers);
+
+    // remember list of blockers
+    blockers = unique(blockers);
+    cacheResult(item, blockers);
   }
 
-  this.allBlockers = unique(blockers);
-  return this.allBlockers;
+  return blockers;
 };
 
+var getFromCache = function (item) {
+  return itemsBlockers[itemsRef.indexOf(item)];
+};
 
-var foos = [];
+var cacheResult = function (item, result) {
+  itemsBlockers[itemsRef.push(item) - 1] = result;
+};
 
-var a = new Foo('a');
-var b = new Foo('b');
-var c = new Foo('c');
-var poo = new Foo('poo');
-var bar = new Foo('bar');
-var baz = new Foo('baz');
-var quux = new Foo('quux');
-
-
-
-a.deps([]);
-b.deps([poo]);
-c.deps([a, b]);
-poo.deps([]);
-bar.deps([poo]);
-baz.deps([bar, quux]);
-quux.deps([bar]);
-
-foos = [a, b, c, poo, bar, baz, quux];
-
-// ================================================
-
-
-
+var clearCache = function () {
+  itemsRef = [];
+  itemsBlockers = {};
+};
 
 var copyArray = function (arr) {
   var copy = [];
@@ -90,13 +76,23 @@ var unique = function (arr) {
 
   return arr;
 };
-
-var getClearPath = function (items) {
+  
+/**
+* Given an array of items and a method to determine what an item's blockers are,
+* get an array of the items sorted so in a way so that you can go down the list
+* without being blocked.
+* @param {Class[]} items
+* @param {Function} getItemBlockerFn - passed a {Class} item,
+* should return an array of 0 or more {Class} items 
+* @return {Class[]}
+*/
+var getClearPath = function (items, getItemBlockerFn) {
   var cleared = copyArray(items);
+  clearCache();
   
   cleared.sort(function (a, b) {
-    var aBlockers = a.getAllBlockers().length;
-    var bBlockers = b.getAllBlockers().length;
+    var aBlockers = getAllBlockers(a, getItemBlockerFn).length;
+    var bBlockers = getAllBlockers(b, getItemBlockerFn).length;
 
     return aBlockers - bBlockers;
   });
@@ -104,4 +100,4 @@ var getClearPath = function (items) {
   return cleared;
 };
 
-console.log(getClearPath(foos));
+exports.getClearPath = getClearPath;
