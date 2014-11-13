@@ -5,11 +5,15 @@
 var itemsRef = [];
 var itemsBlockers = {};
 
-var getAllBlockers = function (item, getItemBlockerFn) {
+var getAllBlockers = function (item, getItemBlockerFn, blocked) {
   var blockers;
-  var subBlockers = [];
   var i = 0;
   var length;
+
+  blocked = blocked || [];
+  if (blocked.indexOf(item) > -1) {
+    throw new Error('circular dependency');
+  }
 
   blockers = getFromCache(item);
 
@@ -17,21 +21,30 @@ var getAllBlockers = function (item, getItemBlockerFn) {
   if (blockers === undefined) {
     blockers = [];
     blockers = copyArray(getItemBlockerFn(item));
+
     length = blockers.length;
 
     // recurse
     while (i < length) {
-      subBlockers = subBlockers.concat(getItemBlockerFn(blockers[i]));
+      blockers = blockers.concat(getAllBlockers(blockers[i], getItemBlockerFn), blockers);
       i++;
     }
 
-    // combine with recursive blockers
-    blockers = blockers.concat(subBlockers);
-
-    // remember list of blockers
     blockers = unique(blockers);
+
     cacheResult(item, blockers);
   }
+  
+  // check for circular dependencies
+  // console.log(item.name + '------');
+  // item.needs.forEach(function (need) {
+  //   console.log(need.name);
+  //   need.needs.forEach(function (need) {
+  //     console.log(need.name);
+  //   });
+  // });
+
+
 
   return blockers;
 };
